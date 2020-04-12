@@ -1,0 +1,9 @@
+# OPLS
+opls-topology-file: parameter-files/top_opls_aam.inp
+opls-parameters-file: parameter-files/par_opls_aam.inp
+
+# ABSINTH
+abs-opls-pka-file: parameter-files/abs3.4_opls_unofficial_pka.prm
+abs-charmm-pka-file: parameter-files/abs3.2_charmm_unofficial_pka.prm
+
+
