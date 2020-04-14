@@ -59,10 +59,11 @@ BondedTypeImptors   = namedtuple('BondedTypeImptors', 'j, k, l, m, bond_potentia
 # ---------------------------------------------------------------------------------------------------------------------
 # Return objects
 
-OPLS_Params = namedtuple('OPLS_Params', 'bonds, angles, dihedrals, impropers, nonbonded, hbond')
-Absinth_Params = namedtuple('Absinth_Params', 'angles, atoms, '
-                                              'biotypes, bonds, bonded_type_angles, bonded_type_bonds, bonded_type_imptors, '
-                                              'bonded_type_torsions, charges, contacts, fos, interacts, radii, torsions')
+OPLS_Params     = namedtuple('OPLS_Params', 'bonds, angles, dihedrals, impropers, nonbonded, hbond')
+OPLS_Topology   = namedtuple('OPLS_Topology', 'declarations, masses, residues, patched_residues')
+Absinth_Params  = namedtuple('Absinth_Params', 'angles, atoms, '
+                                               'biotypes, bonds, bonded_type_angles, bonded_type_bonds, bonded_type_imptors, '
+                                               'bonded_type_torsions, charges, contacts, fos, interacts, radii, torsions')
 
 # ---------------------------------------------------------------------------------------------------------------------
 

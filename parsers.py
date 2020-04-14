@@ -9,12 +9,10 @@ from common_objects import Bond, Angle, Dihedral, Improper, NonBonded, HBond
 from common_objects import AtomType, BioType, BondLength, ChargeType, FOS, BondAngle, DihedralAngle
 from common_objects import ContactType, InteractType, Radius
 from common_objects import BondedTypeBond, BondedTypeTorsion, BondedTypeAngle, BondedTypeImptors
-from common_objects import OPLS_Params, Absinth_Params
+from common_objects import OPLS_Params, OPLS_Topology, Absinth_Params
 from common_objects import Residue, InternalCoordinate
 from utils import strip_comments
 from collections import OrderedDict
-from pprint import pprint
-from io import StringIO
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -188,6 +186,15 @@ class OPLS_Topology_Parser(Base_Parser):
     # -----------------------------------------------------------------------------------------------------------------
     # EXTRACTION SECTION
 
+    def _extract_declarations(self, decl_chunk):
+        declarations = list()
+        for match in decl_chunk[0]:
+            if 'DECL' in match:
+                declaration = match.split()[1]
+                declarations.append(declaration)
+        return declarations
+
+
     def _extract_residue_information(self, chunk):
         name = None
         charge = 0.0
@@ -340,15 +347,18 @@ class OPLS_Topology_Parser(Base_Parser):
             if line.startswith('RES'):  res_indices.append(index)
             if line.startswith('PRES'): pres_indices.append(index)
 
-        decl_chunks = self._get_chunks(decl_indices)  # decl is one group / contiguous
-        mass_chunks = self._get_chunks(mass_indices)  # mass is also one group / contiguous
+        decl_chunks = self._get_chunks(decl_indices, collect_contiguous=True)  # decl is one group / contiguous
+        mass_chunks = self._get_chunks(mass_indices, collect_contiguous=True)  # mass is also one group / contiguous
         res_chunks = self._get_chunks(res_indices)
         pres_chunks = self._get_chunks(pres_indices)
 
+        declarations = self._extract_declarations(decl_chunks)
         masses = self._assign_masses(mass_chunks)
         residues = self._extract_residues(res_chunks)
         patched_residues = self._extract_residues(pres_chunks)
-        return masses, residues, patched_residues
+
+        topology = OPLS_Topology(declarations, masses, residues, patched_residues)
+        return topology
 
 
 # ---------------------------------------------------------------------------------------------------------------------

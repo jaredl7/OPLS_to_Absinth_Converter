@@ -10,8 +10,8 @@ def main():
     args = parser.parse_args()
 
     config = utils.load_config(args.config)
-    parse_files(config)
 
+    check_cutoff_biotypes_internal(config)
 
 
 if __name__ == '__main__':
