@@ -1,0 +1,19 @@
+friendly-names:
+    NTER:   Standard N-terminus
+    GLYP:   Glycine N-terminus
+    PROP:   Proline N-Terminal
+    ACE:    Acetylated N-terminus
+    ACP:    Acetylated N-terminus (Proline)
+    CTER:   Standard C-terminus
+    CTP:    Protonated C-terminus
+    CTPG:   Protonated C-terminus (Glycine)
+    CT3:    N-Methylamide C-terminus
+    GLYC:   Standard C-terminus (Glycine)
+    PROC:   Standard C-terminus (Proline)
+    ASPP:   Protonated Aspartic Acid
+    GLUP:   Protonated Glutamic Acid
+    LINK:   Linkage for Images or for Joining Segments
+    DISU:   Patch for Disulfides (1-CYS and 2-CYS)
+    LIG1:   Linkage for Cyclic Peptide
+    LIG2:   Linkage for Cyclic Peptide
+    LIG3:   Linkage for Cyclic Peptide
