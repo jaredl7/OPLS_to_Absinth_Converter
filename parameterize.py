@@ -485,7 +485,7 @@ def add_OPLS_patched_residues(absinth_parameters_file, opls_topology_file, opls_
                 i = copy.copy(match[-1])
                 j = copy.copy(match[-1])
                 epsilon = opls_parameters.nonbonded[index].epsilon
-                interact_type = InteractType(i, j, epsilon)
+                interact_type = InteractType(i, j, abs(epsilon))  # epsilon is negative in OPLS, is positive in ABSINTH
                 new_interacts.append(interact_type)
 
             # next, add the charge types
