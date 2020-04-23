@@ -8,3 +8,6 @@ abs-charmm-pka-file: parameter-files/abs3.2_charmm_unofficial_pka.prm
 
 # names of patched residues
 patched-residue-names: patched_residue_names.yaml
+
+# The savename of the output OPLS file
+new-parameter-file-savename: abs3.2_opls_from_charmm_pka.prm

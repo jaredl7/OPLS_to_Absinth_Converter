@@ -5,10 +5,13 @@ parameter using using the OPLS parameter and topology files.
 from parsers import OPLS_Topology_Parser, OPLS_Parameters_Parser, Absinth_Parameters_Parser
 from common_objects import BioType, AtomType, ChargeType, InteractType, ContactType
 from common_objects import BondLength, BondAngle, DihedralAngle
+from common_objects import BondedTypeBond, BondedTypeAngle, BondedTypeTorsion, BondedTypeImptors
+from common_objects import Bond, Angle, Dihedral, Improper
 from collections import OrderedDict
 from itertools import chain
 from pprint import pprint
 from utils import load_yaml_file
+from tabulate import tabulate
 import copy
 import math
 import re
@@ -93,7 +96,7 @@ def validate_biotypes(absinth_parser, opls_topology, opls_parameters):
 
 def validate(config):
     absinth_parser, opls_topology, opls_parameters = parse_files(config)
-    residues = copy.deepcopy(opls_topology.residues)
+    residues = opls_topology.residues[::]
     residues.update(opls_topology.patched_residues)
     
     validate_atoms(absinth_parser, opls_topology.masses, residues)
@@ -159,8 +162,7 @@ def search_biotypes(patched_residues, absinth_parser):
             #print(atom, matches)
 
 
-def determine_atomic_number(search_atom):
-    atomic_numbers = {'MW': 0, 'H': 1, 'C': 6, 'N': 7, 'O': 8, 'NA': 11, 'P': 15, 'S': 16, 'CL': 17, 'K': 19, 'BR': 35, 'I': 53, 'CS': 55}
+def determine_search_string(search_atom):
     regex_primary = re.compile('([A-Za-z]+)([0-9]+)')
     regex_alternative = re.compile('([0-9]+)([A-Za-z]+)')
 
@@ -170,7 +172,6 @@ def determine_atomic_number(search_atom):
     split_search_string = [match for match in regex.split(search_atom) if len(match) > 0]
     
     search = None
-    result = None
     # this is for the case where the search_atom is something like "C" or "N"
     if len(split_search_string) == 1:
         search = split_search_string[0]  # this is guaranteed to be a non-number
@@ -180,6 +181,13 @@ def determine_atomic_number(search_atom):
         search = split_search_string[0]
         if search.isnumeric():
             search = split_search_string[-1]
+    return search
+
+
+def determine_atomic_number(search_atom):
+    atomic_numbers = {'MW': 0, 'H': 1, 'C': 6, 'N': 7, 'O': 8, 'NA': 11, 'P': 15, 'S': 16, 'CL': 17, 'K': 19, 'BR': 35, 'I': 53, 'CS': 55}
+    search = determine_search_string(search_atom)
+    result = None
 
     query = search[::]
     if query in atomic_numbers:
@@ -263,13 +271,35 @@ def add_OPLS_bonds(opls_parameters, starting_bond_number, potential_type=1):
     # This one is a little tricky. For the bondlengths (i.e. "bond" in Absinth parlance),
     # the two atoms are not required when defining the bond (that's done in bonded_type_bond).
     # So, all we have to do here is create a new "bond" from the last bond number.
+
+    '''
+    # IMPORTANT: If I understand this correctly, the bonds for ABSINTH are completely different than the bonds
+    # described in OPLS. OPLS defines two atoms and how they should be paired, while ABSINTH is completely
+    # abstract. The best way I can think of this is that `bonded_type_bond` refers to two different
+    # bonds which will be built from chemistry and geometry. Enumerating the possible pairs allows for
+    # the bonds to be created.
+    bond_combinations = OrderedDict()
+    for opls_bond in opls_parameters.bonds:
+        a = opls_bond.atom_a
+        b = opls_bond.atom_b
+        pair = (a, b)
+        bond = BondLength(starting_bond_number, potential_type, opls_bond.spring_constant, opls_bond.reference_bond_length, 0)  # there is no `c`
+        bond_combinations[pair] = bond
+        starting_bond_number += 1
+
+        bond = BondLength(starting_bond_number, potential_type, opls_bond.spring_constant, opls_bond.reference_bond_length, 0)  # there is no `c`
+        bond_combinations[pair[::-1]] = bond
+        starting_bond_number += 1
+    return list(bond_combinations.values())    
+    '''
     bonds = list()
     for opls_bond in opls_parameters.bonds:
+        #print(opls_bond)
         bond = BondLength(starting_bond_number, potential_type, opls_bond.spring_constant, opls_bond.reference_bond_length, 0)  # there is no `c`
         starting_bond_number += 1
         bonds.append(bond)
     return bonds
-
+    
 
 def add_OPLS_angles(opls_parameters, starting_angle_number, potential_type=1):
     angles = list()
@@ -287,6 +317,15 @@ def add_OPLS_dihedrals(opls_parameters, starting_dihedral_number, potential_type
         starting_dihedral_number += 1
         dihedrals.append(dihedral)
     return dihedrals
+
+
+def add_OPLS_bonded_types(opls_topology, opls_parameters, starting_bond_number):
+    bonded_type_bonds = list()
+    for bt in opls_parameters.bonds:
+        #print(bt)
+        # figure out what's the name
+        starting_bond_number += 1
+    return bonded_type_bonds
 
 
 def add_OPLS_biotypes(residue, opls_topology, current_biotype):
@@ -308,52 +347,120 @@ def add_OPLS_biotypes(residue, opls_topology, current_biotype):
     return new_biotypes, current_biotype
 
 
-def add_OPLS_patched_residues(absinth_parameters_file, opls_topology_file, opls_parameters_file, patched_residue_names_file):
-    # This is the directive: take the patched OPLS residues, and add them to the biotypes.
+def create_atom_mass_class_lookup_table(residues):
+    atoms_lookup_table = OrderedDict()
+    for residue_name in residues:
+        residue = residues[residue_name]
+        for atom_name in residue.atoms:
+            atom = residue.atoms[atom_name]
+            if atom_name not in atoms_lookup_table:
+                atoms_lookup_table[atom_name] = [atom.mass_class]
+            else:
+                atoms_lookup_table[atom_name].append(atom.mass_class)
+                atoms_lookup_table[atom_name] = sorted(list(set(atoms_lookup_table[atom_name])))
+    return atoms_lookup_table
+
+
+def create_bond_lookup_table(bonds):
+    bond_lookup_table = OrderedDict()
+    for bond in bonds:
+        key = (bond.atom_a, bond.atom_b)
+        bond_lookup_table[key] = bond
+    return bond_lookup_table
+
+
+def find_line_contents(data, search_string):
+    line_numbers = list()
+    for number, line in enumerate(data):
+        if line.startswith(search_string):
+            line_numbers.append(number)
+    return line_numbers
+
+
+def output_object_to_list(generic_object, name):
+    # note: this is only for namedtuples!
+    output = [name]
+    for field in generic_object._fields:
+        value = getattr(generic_object, field)
+        output.append(value)
+    return output
+
+
+def output_objects_to_string(object_container, name):
+    objects = list()
+    for generic_object in object_container:
+        object_as_list = output_object_to_list(generic_object, name)
+        objects.append(object_as_list)
+    new_lines = tabulate(objects, object_container[0]._fields, tablefmt='plain')
+    return new_lines.split('\n')[1:]
+
+
+def add_OPLS_patched_residues(absinth_parameters_file, opls_topology_file, opls_parameters_file, patched_residue_names_file, savename):
     absinth_parser, opls_topology, opls_parameters = parse_files(absinth_parameters_file, opls_topology_file, opls_parameters_file)
-    patched_names = load_yaml_file(patched_residue_names_file)['friendly-names']
+    
+    # first read in the parameters file
+    with open(absinth_parameters_file) as f:
+        absinth_raw = f.read().split('\n')
 
-    current_bond_number = absinth_parser.bonds[-1].identifier + 1
-    current_angle_number = absinth_parser.angles[-1].identifier + 1
-    current_dihedral_number = absinth_parser.torsions[-1].identifier + 1
-    current_atom_type = absinth_parser.atoms[-1].number + 1
-    current_contact_type = absinth_parser.contacts[-1].i + 1
-    current_interact_type = absinth_parser.interacts[-1].i + 1
-    current_charge_type = absinth_parser.charges[-1].number + 1
-    current_biotype = absinth_parser.biotypes[-1].number + 1
+    # identify the locations of each section - these will determine where the new parameters will be added
+    absinth_atom_locations                  = find_line_contents(absinth_raw, 'atom ')
+    absinth_contact_locations               = find_line_contents(absinth_raw, 'contact ')
+    absinth_interact_locations              = find_line_contents(absinth_raw, 'interact ')
+    absinth_radius_locations                = find_line_contents(absinth_raw, 'radius ')
+    absinth_charge_locations                = find_line_contents(absinth_raw, 'charge ')
+    absinth_fos_locations                   = find_line_contents(absinth_raw, 'fos ')
+    absinth_bond_locations                  = find_line_contents(absinth_raw, 'bond ')
+    absinth_angle_locations                 = find_line_contents(absinth_raw, 'angle ')
+    absinth_torsion_locations               = find_line_contents(absinth_raw, 'torsion ')
+    absinth_biotype_locations               = find_line_contents(absinth_raw, 'biotype ')
+    absinth_bondedtype_bond_locations       = find_line_contents(absinth_raw, 'bonded_type_bond ')
+    absinth_bondedtype_angle_locations      = find_line_contents(absinth_raw, 'bonded_type_angle ')
+    absinth_bondedtype_imptors_locations    = find_line_contents(absinth_raw, 'bonded_type_imptors ')
+    absinth_bondedtype_torsions_locations   = find_line_contents(absinth_raw, 'bonded_type_torsions ')
 
-    new_bonds = add_OPLS_bonds(opls_parameters, current_bond_number)
-    new_angles = add_OPLS_angles(opls_parameters, current_angle_number)
-    new_dihedrals = add_OPLS_dihedrals(opls_parameters, current_dihedral_number)
+    current_atom_type               = absinth_parser.atoms[-1].number + 1
+    current_contact_type            = absinth_parser.contacts[-1].i + 1
+    current_interact_type           = absinth_parser.interacts[-1].i + 1
+    current_charge_type             = absinth_parser.charges[-1].number + 1
+    current_biotype                 = absinth_parser.biotypes[-1].number + 1
+    current_bonded_type             = list(set(sorted([bt.bond_potential for bt in absinth_parser.bonded_type_bonds])))[-1] + 1
+    current_bond_number             = absinth_parser.bonds[-1].identifier + 1
+    current_angle_number            = absinth_parser.angles[-1].identifier + 1
+    current_dihedral_number         = absinth_parser.torsions[-1].identifier + 1
+    current_bondedtype_bond_number  = copy.copy(current_bond_number) + 1
+
+    new_bonds       = add_OPLS_bonds(opls_parameters, current_bond_number)
+    new_angles      = add_OPLS_angles(opls_parameters, current_angle_number)
+    new_dihedrals   = add_OPLS_dihedrals(opls_parameters, current_dihedral_number)
 
     nonbonded_atoms = [nb.atom for nb in opls_parameters.nonbonded]
-    new_contacts_by_mass_class = OrderedDict()
-    new_contacts_by_number = OrderedDict()
+    new_atom_types              = list()
+    new_contacts_by_mass_class  = OrderedDict()
+    new_contacts_by_number      = OrderedDict()
     new_interacts_by_mass_class = OrderedDict()
-    new_interacts_by_number = OrderedDict()
-    new_contacts = list()
-    new_interacts = list()
-    new_charges = list()
-
-    # OK - so as I understand it, this has to work in the following manner:
-    # To create a biotype, we need to define:
-    # 1) A LJ-type
-    # 2) A charge type
-    # 3) A bond type
+    new_interacts_by_number     = OrderedDict()
+    new_contacts                = list()
+    new_interacts               = list()
+    new_charges                 = list()
+    new_biotypes                = list()
+    # new_bonded_type_bonds       = list()
+    # new_bonded_type_angles      = list()
+    # new_bonded_type_torsions    = list()
+    # new_bonded_type_imptors     = list()
     #
     # The bond type is mainly a lookup table. While the others are definitions for how things should be put together.
-    all_new_atom_types = copy.copy(absinth_parser.atoms)
+    all_new_atom_types          = list()
+    all_residue_mass_classes    = list()
+
+    # populate the biotypes, charge types, and interact types
     for residue_name in opls_topology.patched_residues:
         residue = opls_topology.patched_residues[residue_name]
-
-        # the easiest way into this is to create new biotypes, and ignore everything that
-        # exists previously. I'll write another version that accounts for the previous.
-        new_atom_types, current_atom_type = add_OPLS_LJ_types(residue, opls_topology, current_atom_type)
-        all_new_atom_types += new_atom_types  # update the atom_types / LJ_types
+        residue_atom_types, current_atom_type = add_OPLS_LJ_types(residue, opls_topology, current_atom_type)
+        new_atom_types += residue_atom_types  # update the atom_types / LJ_types
 
         # need to add the contact and interact parameters for the atom / LJ_types
-        #add_OPLS_contact_and_interact_types(residue, opls_parameters)
-        for atom_name in residue.atoms:
+        residues_biotypes = list()
+        for idx, atom_name in enumerate(residue.atoms):
             atom = residue.atoms[atom_name]
             index = nonbonded_atoms.index(atom.mass_class)
 
@@ -384,9 +491,32 @@ def add_OPLS_patched_residues(absinth_parameters_file, opls_topology_file, opls_
             # next, add the charge types
             description = "\"OPLS %s (%s)\"" % (residue.name, atom_name)
             charge_type = ChargeType(current_charge_type, description, atom.charge)
-            current_charge_type += 1
             new_charges.append(charge_type)
 
-        # then the bonded types (this is a huge table dump)
+            # now the biotypes
+            biotype = BioType(current_biotype, atom_name, description, new_atom_types[idx].number, current_charge_type, current_bonded_type)
+            residues_biotypes.append(biotype)
+            new_biotypes.append(biotype)
+            current_charge_type += 1
+            current_biotype += 1
+            current_bonded_type += 1
 
-        # finally, the biotypes
+    # now, write the updated lines
+    objects_to_write    = [new_atom_types, new_contacts, new_interacts, 
+                           new_charges, new_bonds, new_angles, 
+                           new_dihedrals, new_biotypes]
+
+    absinth_locations   = [absinth_atom_locations, absinth_contact_locations, absinth_interact_locations, 
+                           absinth_charge_locations, absinth_bond_locations, absinth_angle_locations,
+                           absinth_torsion_locations, absinth_biotype_locations]
+    names               = ['atom', 'contact', 'interact',
+                           'charge', 'bonds', 'angles',
+                           'torsion', 'biotype']
+    header = '########## Added by OPLS-Parser ##########'
+    start = 0
+    savefile = open(savename, 'w')
+    for objects, locations, name in zip(objects_to_write, absinth_locations, names):
+        chunk = absinth_raw[start:locations[-1]+1] + [header] + output_objects_to_string(objects, name)
+        start = locations[-1]+1
+        savefile.write('\n'.join(chunk))
+    savefile.close()

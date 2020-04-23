@@ -19,9 +19,10 @@ def main():
     if args.opls_absinth:
         absinth_parameters_file = config['abs-opls-pka-file']
     patched_residue_names_file  = config['patched-residue-names']
+    savename                    = config['new-parameter-file-savename']
 
     check_cutoff_biotypes_internal(absinth_parameters_file, opls_topology_file, opls_parameters_file, args.quiet)
-    add_OPLS_patched_residues(absinth_parameters_file, opls_topology_file, opls_parameters_file, patched_residue_names_file)
+    add_OPLS_patched_residues(absinth_parameters_file, opls_topology_file, opls_parameters_file, patched_residue_names_file, savename)
 
 
 if __name__ == '__main__':
